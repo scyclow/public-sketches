@@ -1,0 +1,660 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Simulations of Mystical Experiences</title>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="HandheldFriendly" content="true">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+    <meta id="header-theme" name="theme-color" content="#000000">
+
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.1/lib/p5.js"></script>
+
+
+
+    <style type="text/css">
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      canvas {
+        padding: 0;
+        margin: auto;
+        display: block;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+      }
+    </style>
+
+    <script>
+      function genTokenData() {
+
+        let hash = '0x'
+        if (window.location.search.includes('?hash=')) {
+          hash = window.location.search.slice(6)
+        } else {
+          for (let i = 0; i < 64; i++) {
+            hash += Math.floor(Math.random() * 16).toString(16)
+          }
+          window.location.hash = '#' + hash
+        }
+        return {
+          hash,
+        }
+      }
+
+      const tokenData = genTokenData()
+      console.log(tokenData.hash)
+    </script>
+  </head>
+  <body></body>
+
+
+  <script>
+
+
+let SIZE, SCALE, L, R, T, B, W, H
+
+function keyPressed() {
+  if (keyCode === 83) {
+    saveCanvas(__canvas, 'maps-' + Date.now(), 'png');
+  }
+}
+
+
+let SYMMETRICAL_NOISE, NOISE_DIVISOR, TURBULENCE, IGNORE_STREET_CAP, STREET_TURBULENCE, HARD_CURVES
+
+
+let SAT
+
+function setup() {
+  SIZE = min(window.innerWidth, window.innerHeight)
+  __canvas = createCanvas(SIZE, SIZE);
+  noiseSeed(int(rnd(10000000000000000)))
+  colorMode(HSB, 360, 100, 100, 100)
+
+
+  SCALE = SIZE/800
+
+  W = width
+  H = height
+  L = -width/2
+  R = width/2
+  T = -height/2
+  B = height/2
+
+
+  SAT = chance(
+    [10, -100],
+    [80, 0],
+    [10, 100],
+  )
+
+
+  TURBULENCE = rnd() < 0.15
+  STREET_TURBULENCE = rnd() < 0.1
+  IGNORE_STREET_CAP = rnd() < 0.1
+  HARD_CURVES = rnd() < 0.1
+
+  SYMMETRICAL_NOISE = rnd() < 0.75
+
+  NOISE_DIVISOR = rnd(100, 750)
+
+  const layerN = rnd(30, 60)
+
+
+  let thresholdAdj = 0
+  if (layerN === 30) {
+    thresholdAdj = 0.02
+  } else if (NOISE_DIVISOR < 100) {
+    thresholdAdj = map(100 - NOISE_DIVISOR, 0, 25, 0.4, 0.6)
+  }
+  thresholdAdj = rnd(0.01, 0.3)
+  LAYERS = setLayers(layerN, thresholdAdj)
+}
+
+
+t = 0
+function draw() {
+
+  // noLoop()
+
+  translate(width/2, height/2)
+  scale(SCALE)
+
+
+  const START = Date.now()
+
+  const preRender = 200
+  if (t === 0) {
+    times(preRender, i => {
+      drawBackground(i, true)
+    })
+  }
+
+  drawBackground(t+preRender)
+  // drawStreetGrid()
+
+  t++
+
+  // console.log(Date.now() - START)
+}
+
+
+let LAYERS = []
+
+
+
+function setLayers(layerN, startingElevation=false) {
+  const avgElevation = findAvgElevation()
+
+  const thresholdDiff = 0.02
+  const r = rules(layerN)
+  const ruleNames = Object.keys(r)
+
+  const hueDiff = chance(
+    [1, 0],
+    [2, 100],
+    [2, 150],
+    [2, 180],
+  ) * posOrNeg()
+
+  const layers = [{
+    ix: 0,
+    threshold: startingElevation || avgElevation,
+    hideStreets: false,
+    ...r[sample(ruleNames)](rnd(360), 120)
+  }]
+
+  const newLayer = (previousLayer, threshold, ix) => {
+    const hue = previousLayer.baseHue + hueDiff
+    return {
+      ix,
+      threshold,
+      hideStreets: rnd() < 0.1,
+      ...r[chance(...previousLayer.neighbors)](hue)
+    }
+  }
+
+  for (let i = 1; i < layerN; i++) {
+    const previousLayer = layers[i-1]
+    const threshold = i === layerN - 1
+      ? 1
+      : previousLayer.threshold + thresholdDiff
+
+    layers.push(newLayer(previousLayer, threshold, i))
+  }
+
+  return layers
+}
+
+
+
+const GRADIEN_PRB = 0.0625
+const getGradient = (force, mx=360) => {
+  return rnd() < GRADIEN_PRB || force
+    ? {
+      focalPoint: {
+        x: rnd(L, R),
+        y: rnd(T, B)
+      },
+      hue: rnd(mx/4, mx) * posOrNeg(),
+      sat: 0,
+      brt: 0,
+    }
+    : null
+}
+const rules = (layerN) => {
+  const black = color(0,0,8, 80)
+  const white = color(0, 0, 90,80)
+  const forceGradient = rnd() < 0.02
+  return {
+    blackAndWhite: (h) => {
+      return {
+        name: 'blackAndWhite',
+        baseHue: h,
+        colors: {
+          bg: black,
+        },
+        neighbors: [
+          [0.7, 'whiteAndBlack'],
+          [0.3, 'neon'],
+          [0.3, 'bright'],
+        ],
+        gradient: null,
+        isDark: true,
+        isColor: false,
+        isLight: false,
+      }
+    },
+
+    whiteAndBlack: (h) => {
+      return {
+        name: 'whiteAndBlack',
+        baseHue: h,
+        colors: {
+          bg: white,
+        },
+        neighbors: [
+          [0.5, 'blackAndWhite'],
+          [0.5, 'neon'],
+          [0.5, 'bright'],
+        ],
+        gradient: null,
+        isDark: false,
+        isColor: false,
+        isLight: true,
+      }
+    },
+
+    neon: (h, gradientMax) => {
+      const bg = color(hfix(h), 30, 12)
+      let c = color(hfix(h), adjSat(55, h), 95, 80)
+
+      if (contrast(bg, c) > -0.5) {
+        c = setContrastC2(bg, c, -0.5)
+      }
+
+
+      return {
+        name: 'neon',
+        baseHue: h,
+        colors: {
+          bg,
+        },
+        neighbors: [
+          [0.4, 'blackAndWhite'],
+          [0.4, 'whiteAndBlack'],
+          [0.2, 'neon'],
+          [0.2, 'bright'],
+        ],
+        gradient: getGradient(forceGradient, gradientMax),
+        isDark: true,
+        isColor: false,
+        isLight: false,
+      }
+    },
+
+    bright: (h, gradientMax) => {
+      const c1 = color(hfix(h), adjSat(55, h), 95, 80)
+      const c2 = color(hfix(h + 180), 30, 15, 80)
+
+      return {
+        name: 'bright',
+        baseHue: h,
+        colors: {
+          bg: c1, // looks good at (344, 90, 100) with dark blue strokes
+        },
+        neighbors: [
+          [0.4, 'blackAndWhite'],
+          [0.4, 'whiteAndBlack'],
+          [0.2, 'neon'],
+        ],
+        gradient: getGradient(forceGradient, gradientMax),
+        isDark: false,
+        isColor: true,
+        isLight: false,
+      }
+    }
+
+  }
+}
+
+
+
+function adjSat(sat, hue) {
+  // const h = ((hue + 90) % 180) / 180
+  // return sat - map(h, 0, 1, 0, 50)
+
+  hue = hfix(hue)
+
+  let amt = 0
+  if (hue >= 90 && hue <= 150) {
+    amt = 1 - abs(120 - hue) / 30
+
+  } else if (hue >= 270 && hue <= 330) {
+    amt = 1 - abs(300 - hue) / 30
+  }
+
+  return sat - map(amt, 0, 1, 0, 20)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+function findActiveLayer(x, y, z) {
+  const n = getElevation(x, y, z)
+
+  for (let i = 0; i < LAYERS.length; i++) {
+    if (n < LAYERS[i].threshold) return LAYERS[i]
+  }
+  return LAYERS[LAYERS.length - 1]
+}
+
+
+
+
+
+function findAvgElevation() {
+  let elevationSum = 0
+  let elevationIx = 0
+  const step = 30
+  for (let x = L; x < R; x += step)
+  for (let y = T; y < B; y += step) {
+    elevationSum += getElevation(x, y)
+    elevationIx++
+  }
+  return elevationSum/elevationIx
+}
+
+function getElevation(x, y, z) {
+  const offset = SYMMETRICAL_NOISE ? 0 : 100000
+  return noise(
+    (x+offset)/NOISE_DIVISOR,
+    (y+offset)/NOISE_DIVISOR,
+    z
+  )
+}
+
+const setContrastC2 = (_c1, _c2, newContrast=0.4) => {
+  const _contrast = contrast(_c1, _c2)
+
+  const amt = (newContrast - _contrast)/0.3
+
+  return color(
+    hue(_c2),
+    saturation(_c2) + 20*amt,
+    brightness(_c2) - 30*amt
+  )
+}
+
+
+const Q_PI = Math.PI/4
+const NEG_Q_PI = -Math.PI/4
+
+
+function drawBackground(t, smooth=false) {
+  push()
+  if (t===0) background(LAYERS[0].colors.bg)
+
+  const strokeSize = 2//2/SCALE
+
+
+  const frameAmt = 60
+  const _t = int(t/frameAmt)
+  const frame = t % frameAmt
+  const frameIncrement = H / frameAmt
+
+  const start = T + (frame * frameIncrement)
+  const end = T + ((frame+1) * frameIncrement)
+
+  const _y = int(rnd(0, frameAmt))
+  const _x = int(rnd(0, frameAmt))
+
+  const startY = (smooth ? start : T + (_y * frameIncrement))
+  const endY = (smooth ? end : T + ((_y+6) * frameIncrement))
+
+  const startX = (smooth ? L : L + (_x * frameIncrement))
+  const endX = (smooth ? R : L + ((_x+6) * frameIncrement))
+
+
+  for (let y = startY; y < endY; y += strokeSize) {
+    for (let x = startX; x < endX; x += strokeSize) {
+      const layer = findActiveLayer(x, y, _t/200)
+      drawBackgroundStroke(x, y, layer, strokeSize, LAYERS, _t)
+    }
+  }
+  pop()
+}
+
+function drawBackgroundStroke(x, y, layer, strokeSize, layers, t) {
+  const baseLayer = layers[0]
+  // increase/decrease rnd hue/sat for graininess
+  const colorMismatch = (
+    (layer.isColor && baseLayer.isDark) ||
+    (baseLayer.isColor && layer.isDark)
+  )
+
+  const colorMismatchIffy = (baseLayer.isLight && layer.isDark)
+
+  const largeLayer = (layer.ix === 0 || layer.ix === layers.length - 1)
+
+  const strokeMultiplier =
+    largeLayer && colorMismatch ? 1.25 :
+    largeLayer && colorMismatchIffy ? 1.15 :
+    1
+
+  let diam = rnd(strokeSize, strokeSize*2) * strokeMultiplier
+  let offset = strokeSize/2
+
+  strokeWeight(diam/3.5)
+
+  let hAdj = t * 5
+  let sAdj = SAT
+  let bAdj = 0
+  if (layer.gradient) {
+    const d =
+      dist(x, y, layer.gradient.focalPoint.x, layer.gradient.focalPoint.y)
+      / dist(L, B, R, T)
+
+    hAdj = map(d, 0, 1, 0, layer.gradient.hue) + t * 10
+    sAdj = map(d, 0, 1, 0, layer.gradient.sat)
+    bAdj = map(d, 0, 1, 0, layer.gradient.brt)
+
+  }
+
+  stroke(
+    hfix(hue(layer.colors.bg) + rnd(-3, 3) + hAdj),
+    saturation(layer.colors.bg) + rnd(-5, 5) + sAdj,
+    brightness(layer.colors.bg) + rnd(-10, 0) + bAdj,
+  )
+  // fill(
+  //   hfix(hue(layer.colors.bg) + rnd(-3, 3) + hAdj),
+  //   saturation(layer.colors.bg) + rnd(-5, 5) + sAdj,
+  //   brightness(layer.colors.bg) + rnd(-10, 0) + bAdj,
+  // )
+  const angle = noise(x+W, y+H)
+
+  const [x0, y0] = getXYRotation(PI+angle+rnd(NEG_Q_PI, Q_PI), strokeSize, x, y)
+  const [x1, y1] = getXYRotation(angle+rnd(NEG_Q_PI, Q_PI), strokeSize, x, y)
+
+  line(x0, y0, x1, y1)
+  // rect(x0, y0, strokeSize, strokeSize)
+}
+
+
+const setC = (x, y, c, g) => {
+
+  if (g) {
+    const d =
+      dist(x, y, g.focalPoint.x, g.focalPoint.y)
+      / dist(L, B, R, T)
+
+    const _c = color(
+      hfix(hue(c) + map(d, 0, 1, 0, g.hue)),
+      saturation(c) + map(d, 0, 1, 0, g.sat),
+      brightness(c) + map(d, 0, 1, 0, g.brt),
+    )
+    stroke(_c)
+    fill(_c)
+
+
+  } else {
+    stroke(c)
+    fill(c)
+  }
+
+
+
+}
+
+const coordToTuple = ({ x, y }) => [x, y]
+
+function findIntersectionPoint(c1, c2, coordLists) {
+  if (!coordLists.length) return false
+  const coord1 = coordToTuple(c1)
+  const coord2 = coordToTuple(c2)
+
+  return coordLists.some(coordList => {
+
+    if (coordList.coords.length < 10) return intersects(
+      coordToTuple(c1),
+      coordToTuple(c2),
+      coordToTuple(coordList.coords[0]),
+      coordToTuple(last(coordList.coords))
+    )
+
+    const size =
+      coordList.coords.length < 20 ? 2 :
+      coordList.coords.length < 40 ? 4 :
+      coordList.coords.length < 70 ? 7 :
+      10
+
+    for (let i=0; i<coordList.coords.length; i+=size) {
+      const coord3 = coordToTuple(coordList.coords[i])
+      const coord4 = coordToTuple(coordList.coords[i+size] || last(coordList.coords))
+      const bool = intersects(coord1, coord2, coord3, coord4)
+
+      if (bool) return bool
+    }
+    return false
+  })
+}
+
+function dotLine(x1, y1, x2, y2, dotFn) {
+  const { d, angle } = lineStats(x1, y1, x2, y2)
+
+  let x = x1
+  let y = y1
+  for (let i = 0; i <= d; i++) {
+    dotFn(x, y, i/d, angle);
+
+    ([x, y] = getXYRotation(angle, 1, x, y))
+  }
+}
+
+
+function chance(...chances) {
+  const total = chances.reduce((t, c) => t + c[0], 0)
+  const seed = rnd()
+  let sum = 0
+  for (let i = 0; i < chances.length; i++) {
+    sum += chances[i][0] / total
+    if (seed <= sum) return chances[i][1]
+  }
+}
+
+const lineStats = (x1, y1, x2, y2) => ({
+  d: dist(x1, y1, x2, y2),
+  angle: atan2(x2 - x1, y2 - y1)
+})
+
+
+function inPolygon(p, polygon) {
+  if (
+    dist(p[0], p[1], polygon.x, polygon.y) > polygon.r
+  )
+  return false
+
+  const infLine = [width*2, height*2]
+  const intersections = polygon.coords.reduce((sum, l, i) => {
+    const nextI = (i+1) % polygon.coords.length
+    const nextLine = polygon.coords[nextI]
+
+    return intersects(p, infLine, l, nextLine)
+      ? sum + 1
+      : sum
+  }, 0)
+
+  return intersections % 2 === 1
+}
+
+function intersects(
+  [x1, y1],
+  [x2, y2],
+  [x3, y3],
+  [x4, y4]
+) {
+  const det = (x2 - x1) * (y4 - y3) - (x4 - x3) * (y2 - y1)
+  if (det === 0) return false
+
+  const lambda = ((y4 - y3) * (x4 - x1) + (x3 - x4) * (y4 - y1)) / det
+  const gamma = ((y1 - y2) * (x4 - x1) + (x2 - x1) * (y4 - y1)) / det
+  if ( (lambda > 0 && lambda < 1) && (gamma > 0 && gamma < 1) ) {
+    return [
+      x1 + lambda * (x2 - x1),
+      y1 + lambda * (y2 - y1)
+    ]
+  } else {
+    return null
+  }
+}
+
+
+function getXYRotation (deg, radius, cx=0, cy=0) {
+  return [
+    sin(deg) * radius + cx,
+    cos(deg) * radius + cy,
+  ]
+}
+
+
+function times(t, fn) {
+  const out = []
+  for (let i = 0; i < t; i++) out.push(fn(i))
+  return out
+}
+
+let __randomSeed = parseInt(tokenData.hash.slice(50, 58), 16)
+
+const resetRandomSeed = () => { __randomSeed = parseInt(tokenData.hash.slice(50, 58), 16) }
+
+function rnd(mn, mx) {
+  __randomSeed ^= __randomSeed << 13
+  __randomSeed ^= __randomSeed >> 17
+  __randomSeed ^= __randomSeed << 5
+  const out = (((__randomSeed < 0) ? ~__randomSeed + 1 : __randomSeed) % 1000) / 1000
+  if (mx != null) return mn + out * (mx - mn)
+  else if (mn != null) return out * mn
+  else return out
+}
+
+function hshrnd(h) {
+  const str = tokenData.hash.slice(2 + h*2, 4 + h*2)
+  return parseInt(str, 16) / 255
+}
+
+const prb = x => rnd() < x
+
+const posOrNeg = () => prb(0.5) ? 1 : -1
+
+const sample = (a) => a[int(rnd(a.length))]
+const hfix = h => (h + 360) % 360
+const exists = x => !!x
+const last = a => a[a.length-1]
+
+const luminance = c => (299*red(c) + 587*green(c) + 114*blue(c))/1000
+const contrast = (c1, c2) => (luminance(c1) - luminance(c2))/255
+
+
+
+  </script>
+
+
+
+
+</html>
