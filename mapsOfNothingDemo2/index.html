@@ -1270,33 +1270,6 @@
 
     <script>
       let votes = {}
-      const $results = document.getElementById('results')
-      function upvote(i) {
-        if (votes[i] === 1) {
-          votes[i] = 0
-          $results.value = JSON.stringify(votes)
-          document.getElementById('upvote-'+i).className = 'upvote'
-
-        } else {
-          votes[i] = 1
-          $results.value = JSON.stringify(votes)
-          document.getElementById('upvote-'+i).className = 'upvote active'
-          document.getElementById('downvote-'+i).className = 'downvote'
-        }
-      }
-
-      function downvote(i) {
-        if (votes[i] === -1) {
-          votes[i] = 0
-          $results.value = JSON.stringify(votes)
-          document.getElementById('upvote-'+i).className = 'downvote'
-        } else {
-          votes[i] = -1
-          $results.value = JSON.stringify(votes)
-          document.getElementById('upvote-'+i).className = 'upvote'
-          document.getElementById('downvote-'+i).className = 'downvote active'
-        }
-      }
 
 
 
@@ -1336,8 +1309,6 @@
 
 
         const outputs = document.getElementsByClassName('img')
-
-        votes = JSON.parse(document.getElementById('results').value || '{}')
 
 
         const isTrue = val => ['true', 't', 'y', 'yes', '1'].includes(val)
@@ -1385,11 +1356,6 @@
             output.style.display = 'none'
           }
 
-          if (votes[i] === 1) {
-            document.getElementById('upvote-'+i).className = 'upvote active'
-          } else if (votes[i] === -1) {
-            document.getElementById('downvote-'+i).className = 'downvote active'
-          }
           i++
         }
         document.getElementById('filter-count').innerHTML = count
